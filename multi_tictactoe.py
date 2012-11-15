@@ -57,7 +57,8 @@ class Game():
             winner = self.matrix[1][1]
         return winner
 
-    def end_message(self, winner):
+    def end_message(self):
+        winner = self.winner_if_any()
         if winner == 'x':
             message = "Game over. You win!"
         elif winner == 'o':
@@ -65,16 +66,6 @@ class Game():
         else:
             message = "Game over. Tie game."
         return message
-
-    def print_board(self):
-        for i in range(0, 2):
-            for j in range(0, 2):
-                print self.matrix[i][j], '|',
-            print self.matrix[i][2]
-            print " -  -  - "
-        for j in range(0, 2):
-            print self.matrix[2][j], '|',
-        print self.matrix[2][2]
 
     def utility(self):  # utility is from player o's perspective (1 if o wins, -1 if o loses)
         winner = self.winner_if_any()
@@ -139,7 +130,7 @@ class Game():
         row, col = availmoves[location]
         self.matrix[row][col] = 'o'
 
-    def send_as_string(self):
+    def board_as_string(self):
         b = reduce(lambda x, y: x + y, self.matrix)  # flatten list of lists
         out = "".join([b[0], " | ", b[1], " | ", b[2], "\n",
                 " -  -  - \n",
@@ -164,8 +155,7 @@ def play_game():
         b.player = b.next_turn(b.player)
         b.print_board()
 
-    winner = b.winner_if_any()
-    print b.end_message(winner)
+    print b.end_message()
 
 if __name__ == '__main__':
     b = Game()
