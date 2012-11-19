@@ -5,6 +5,14 @@ import sys
 import pdb
 import time
 
+# TODO: better logging
+# TODO: error handling when client unexpectedly disconnects (ctrl-c)
+# TODO: objectify
+
+# class TTT_Server(Object):
+#     def __init__(self):
+
+
 
 def parse(move_as_string):
     try:
@@ -19,9 +27,8 @@ def get_message(sock):
         some_string = sock.recv(128)  # move is only three bytes, but want to catch all of invalid move at once
         print "move received:", some_string
         return some_string
-    except socket.error as e:
-        print e
-        return None
+    except socket.error as (err_num, err_string):
+        return "Error"+str(err_num)
 
 
 def make_listen_sock():
@@ -35,10 +42,13 @@ def make_listen_sock():
     return s
 
 def handle_client_move(id_num, socket_list):
-    sock, game, msg_queued, _ = socket_list[id_num]
+    sock, game, msg_queued, _, _ = socket_list[id_num]
     assert game.player == 'x'
     
     msg = get_message(sock) 
+    # if "Error" in msg:
+    #     print msg
+    #     socket_list[id_num][4] = True
     client_move = parse(msg)
 
     if not client_move or not game.validate_move(client_move):
@@ -46,10 +56,10 @@ def handle_client_move(id_num, socket_list):
         msg_queued = "Not valid.  Try again."
     else:
         game.make_move(client_move, game.player)
-        print "Move made:\n", game.board_as_string()
+        print "Move made on socket ", sock.fileno(), ":\n", game.board_as_string()
         game.player = 'o'
 
-    socket_list[id_num][2] = msg_queued
+    socket_list[id_num][2] = msg_queued  # why did this ever work?
 
 
 if __name__ == '__main__':
@@ -66,26 +76,29 @@ if __name__ == '__main__':
         #######################
         closed_socks = []
         for id_num in game_sockets.keys():
-            sock, game, msg_queued, close_socket = game_sockets[id_num]
+            sock, game, msg_queued, game_over, err_flag = game_sockets[id_num]
 
-            if close_socket and not msg_queued:
+            if err_flag:
+                closed_socks.append(id_num)
+
+            if game_over and not msg_queued:
                 sock.close()
                 closed_socks.append(id_num)
 
             elif game.is_over():
                 msg_queued = game.end_message()
-                close_socket = True
+                game_over = True
 
             elif game.player == 'o':
                 game.minimax()
                 if game.is_over():
                     msg_queued = game.board_as_string()+'\n'+game.end_message()
-                    close_socket = True
+                    game_over = True
                 else:
                     msg_queued = game.board_as_string()
                 game.player = 'x'
 
-            game_sockets[id_num] = [sock, game, msg_queued, close_socket]
+            game_sockets[id_num] = [sock, game, msg_queued, game_over, err_flag]
 
         for id_num in closed_socks:
             del game_sockets[id_num]
@@ -110,17 +123,18 @@ if __name__ == '__main__':
                 print "Socket connects", game_sock.getsockname(), "and", game_sock.getpeername()
                 g = Game()  # init new TTT Game
                 msg_queued = "Let's play Tic Tac Toe!\n"+g.board_as_string()
-                close_socket = False
-                game_sockets[game_id_num] = [game_sock, g, msg_queued, close_socket] # add to dict
+                game_over = False
+                err_flag = False
+                game_sockets[game_id_num] = [game_sock, g, msg_queued, game_over, err_flag] # add to dict
 
             else:
-                sock, game, _, _ = game_sockets[id_num]
+                sock, game, _, _, _ = game_sockets[id_num]
                 if game.player == 'x':
                     handle_client_move(id_num, game_sockets)
 
 
         for id_num in write_socks:
-            sock, _, message, _ = game_sockets[id_num]
+            sock, _, message, _, _ = game_sockets[id_num]
             if message:
                 sock.sendall(message)
                 game_sockets[id_num][2] = None  # reset message to None once sent
