@@ -7,24 +7,17 @@ class Game():
         self.matrix = [[' ',' ',' '],[' ',' ',' '],[' ',' ',' ']]
         self.player = 'x'
 
-    def user_move(self):
-        yourmove = raw_input("Enter your move as 0,0 to 2,2\n")
-        i = int(yourmove[0])
-        j = int(yourmove[2])
-        if self.matrix[i][j] != ' ':
-            print "That square is occupied.  Try again."
-            self.user_move()
-        else:
-            self.matrix[i][j] = 'x'
-
-    def validate_remote_move(self, (row, col)):
-        if self.matrix[row][col] != ' ':
+    def validate_move(self, (row, col)):
+        try:
+            if self.matrix[row][col] == ' ':
+                return True
+            else:
+                return False
+        except:
             return False
-        else:
-            return True
 
-    def make_human_move(self, (row, col)):
-        self.matrix[row][col] = 'x'
+    def make_move(self, (row, col), player):
+        self.matrix[row][col] = player
 
     def legal_moves(self):
         moves = []
@@ -33,12 +26,6 @@ class Game():
                 if self.matrix[i][j] == ' ':
                     moves.append([i, j])
         return moves
-
-    def move(self, player):
-        if player == 'o':
-            self.minimax(player)
-        else:
-            self.user_move()
 
     def next_turn(self, player):
         return 'o' if player == 'x' else 'x'
@@ -77,7 +64,7 @@ class Game():
             util = 0
         return util
 
-    def game_over(self):
+    def is_over(self):
         empty_squares = 0
         for i in range(0, 3):  # looping through rows (but not cols - count does that for us)
             empty_squares += self.matrix[i].count(' ')
@@ -90,7 +77,7 @@ class Game():
             return False
 
     def max_value(self):  # maximizing player is computer ('o')
-        if self.game_over():
+        if self.is_over():
             return self.utility()
         else:
             maxval = -10           # initialize
@@ -103,7 +90,7 @@ class Game():
         return max(max(children), maxval)
 
     def min_value(self):  # minimizing player is user ('x')
-        if self.game_over():
+        if self.is_over():
             return self.utility()
         else:
             minval = 10
@@ -115,7 +102,7 @@ class Game():
                 self.matrix[availmoves[i][0]][availmoves[i][1]] = ' '    # undo move
         return min(min(children), minval)
 
-    def minimax(self, player):
+    def minimax(self):
         availmoves = self.legal_moves()
         options = []
         for i in range(0, len(availmoves)):
@@ -149,7 +136,7 @@ def play_game():
     else:
         print "Your turn first"
 
-    while not b.game_over():
+    while not b.is_over():
         b.move(b.player)
         # print "player is", player, "winner_if_any is", b.winner_if_any(), "utility is ", b.utility()
         b.player = b.next_turn(b.player)
