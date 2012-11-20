@@ -9,8 +9,7 @@ import time
 # TODO: error handling when client unexpectedly disconnects (ctrl-c)
 # TODO: objectify
 
-# class TTT_Server(Object):
-#     def __init__(self):
+# TODO: structure the network code to be able to play e.g. checkers just as seamlessly
 
 
 
@@ -32,7 +31,7 @@ def get_message(sock):
 
 
 def make_listen_sock():
-    HOST = sys.argv.pop() if len(sys.argv) == 2 else ""
+    HOST = sys.argv[1] if len(sys.argv) == 2 else "127.0.0.1"
     PORT = 1060
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -46,9 +45,9 @@ def handle_client_move(id_num, socket_list):
     assert game.player == 'x'
     
     msg = get_message(sock) 
-    # if "Error" in msg:
-    #     print msg
-    #     socket_list[id_num][4] = True
+    if "Error" in msg:
+        print msg
+        socket_list[id_num][4] = True
     client_move = parse(msg)
 
     if not client_move or not game.validate_move(client_move):
@@ -68,7 +67,7 @@ if __name__ == '__main__':
     print "Listening for games"
 
     game_sockets = {}
-    # Form: {File_number: (socket, game, message)}
+    # Form: {File_number: (socket, game, message, game_over, error_flag)}
 
     while True:
         #######################
@@ -111,6 +110,7 @@ if __name__ == '__main__':
 
         read_socks, write_socks, _ = select.select(all_sockets, all_sockets, '')
         print "Read:", read_socks, '\nWrite:', write_socks
+        pdb.set_trace()
         #  Perhaps surprising that this works, since all_sockets is just a list of filenumbers.
         #  However, select.select is just looking for file numbers and looking up the corresponding socket objects.
 

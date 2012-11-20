@@ -119,7 +119,8 @@ class Game():
 
     def board_as_string(self):
         b = reduce(lambda x, y: x + y, self.matrix)  # flatten list of lists
-        out = "".join([b[0], " | ", b[1], " | ", b[2], "\n",
+        out = "".join(
+                [b[0], " | ", b[1], " | ", b[2], "\n",
                 " -  -  - \n",
                 b[3], " | ", b[4], " | ", b[5], "\n",
                 " -  -  - \n",
