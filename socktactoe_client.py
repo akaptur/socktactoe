@@ -24,5 +24,5 @@ if __name__ == '__main__':
             print "Thanks for playing!"
             break
         else:
-            msg_to_send = raw_input("Input a move  (0,0 to 2,2)\n")
+            msg_to_send = raw_input("Input a move (0 to 8)\n")
             s.sendall(msg_to_send)
