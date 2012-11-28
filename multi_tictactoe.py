@@ -54,6 +54,9 @@ class Game():
             message = "Game over. Tie game."
         return message
 
+    def start_message(self):
+        return "Let's play tic tac toe!"
+
     def utility(self):  # utility is from player o's perspective (1 if o wins, -1 if o loses)
         winner = self.winner_if_any()
         if winner == 'o':
@@ -147,5 +150,5 @@ def play_game():
 
 if __name__ == '__main__':
     b = Game()
-    print b.send_as_string()
+    print b.board_as_string()
     # play_game()

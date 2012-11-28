@@ -7,9 +7,18 @@ import time
 
 # TODO: better logging
 # TODO: error handling when client unexpectedly disconnects (ctrl-c)
-# TODO: objectify
-
+# TODO: neaten loops (add more functions)
 # TODO: structure the network code to be able to play e.g. checkers just as seamlessly
+
+class Opponent(object):
+    def __init__(self, sock):
+        self.sock = sock
+        self.sock.setblocking(False)
+        self.id_num = sock.fileno()
+        self.game = Game()
+        self.message = self.game.start_message()+"\n"+self.game.board_as_string()
+        self.game_over = False
+        self.err_flag = False
 
 
 
@@ -40,104 +49,91 @@ def make_listen_sock():
 
     return s
 
-def handle_client_move(id_num, socket_list):
-    sock, game, msg_queued, _, _ = socket_list[id_num]
-    assert game.player == 'x'
+def handle_client_move(opp):
+    assert opp.game.player == 'x'
     
-    msg = get_message(sock) 
+    msg = get_message(opp.sock) 
     if "Error" in msg:
         print msg
-        socket_list[id_num][4] = True
+        opp.err_flag = True
     client_move = parse(msg)
 
-    if not client_move or not game.validate_move(client_move):
-        print "Invalid move received on socket %d" % sock.fileno()
-        msg_queued = "Not valid.  Try again."
+    if not client_move or not opp.game.validate_move(client_move):
+        print "Invalid move received on socket %d" % opp.sock.fileno()
+        opp.message = "Not valid.  Try again."
     else:
-        game.make_move(client_move, game.player)
-        print "Move made on socket ", sock.fileno(), ":\n", game.board_as_string()
-        game.player = 'o'
-
-    socket_list[id_num][2] = msg_queued  # why did this ever work?
+        opp.game.make_move(client_move, opp.game.player)
+        print "Move made on socket ", opp.sock.fileno(), ":\n", opp.game.board_as_string()
+        opp.game.player = 'o'
 
 
 if __name__ == '__main__':
     listen_sock = make_listen_sock()
-    listen_id = listen_sock.fileno()
+    # listen_id = listen_sock.fileno()
     print "Listening for games"
 
-    game_sockets = {}
-    # Form: {File_number: (socket, game, message, game_over, error_flag)}
+    opponents = {}
 
     while True:
         #######################
         ### GAME PROCESSING ###
         #######################
         closed_socks = []
-        for id_num in game_sockets.keys():
-            sock, game, msg_queued, game_over, err_flag = game_sockets[id_num]
 
-            if err_flag:
-                closed_socks.append(id_num)
+        for opp in opponents.values():
 
-            if game_over and not msg_queued:
-                sock.close()
-                closed_socks.append(id_num)
+            if opp.err_flag: 
+                closed_socks.append(opp.sock)
 
-            elif game.is_over():
-                msg_queued = game.end_message()
-                game_over = True
+            if opp.game_over and not opp.message:
+                opp.sock.close()
+                closed_socks.append(opp.sock)
 
-            elif game.player == 'o':
-                game.minimax()
-                if game.is_over():
-                    msg_queued = game.board_as_string()+'\n'+game.end_message()
-                    game_over = True
+            elif opp.game.is_over():
+                opp.message = opp.game.end_message()
+                opp.game_over = True
+
+            elif opp.game.player == 'o':
+                opp.game.minimax()
+                if opp.game.is_over():
+                    opp.message = opp.game.board_as_string()+'\n'+opp.game.end_message()
+                    opp.game_over = True
                 else:
-                    msg_queued = game.board_as_string()
-                game.player = 'x'
+                    opp.message = opp.game.board_as_string()
+                opp.game.player = 'x'
 
-            game_sockets[id_num] = [sock, game, msg_queued, game_over, err_flag]
-
-        for id_num in closed_socks:
-            del game_sockets[id_num]
+        opponents = dict((k,opp) for (k, opp) in opponents.items() if opp.sock not in closed_socks)
 
         #########################
         ### SOCKET PROCESSING ###
         #########################
-        all_sockets = game_sockets.keys() + [listen_id]
+        all_sockets = [opp.sock for opp in opponents.values()] + [listen_sock]
         print "All sockets:", all_sockets
 
         read_socks, write_socks, _ = select.select(all_sockets, all_sockets, '')
         print "Read:", read_socks, '\nWrite:', write_socks
-        pdb.set_trace()
-        #  Perhaps surprising that this works, since all_sockets is just a list of filenumbers.
-        #  However, select.select is just looking for file numbers and looking up the corresponding socket objects.
 
-        for id_num in read_socks:
-            if id_num == listen_id:
+        # pdb.set_trace()
+
+        for sock in read_socks:
+            if sock is listen_sock:
                 game_sock, address = listen_sock.accept()
-                game_sock.setblocking(False)  # very important
-                game_id_num = game_sock.fileno()
-                print "New game:", game_id_num
+                opp = Opponent(game_sock)
+                print "New game:", opp.id_num
                 print "Socket connects", game_sock.getsockname(), "and", game_sock.getpeername()
-                g = Game()  # init new TTT Game
-                msg_queued = "Let's play Tic Tac Toe!\n"+g.board_as_string()
-                game_over = False
-                err_flag = False
-                game_sockets[game_id_num] = [game_sock, g, msg_queued, game_over, err_flag] # add to dict
+                opponents[opp.id_num] = opp
 
             else:
-                sock, game, _, _, _ = game_sockets[id_num]
-                if game.player == 'x':
-                    handle_client_move(id_num, game_sockets)
+                opp = opponents[sock.fileno()]
+                if opp.game.player == 'x':
+                    handle_client_move(opp)
 
 
-        for id_num in write_socks:
-            sock, _, message, _, _ = game_sockets[id_num]
-            if message:
-                sock.sendall(message)
-                game_sockets[id_num][2] = None  # reset message to None once sent
-
-
-
+        for sock in write_socks:
+            opp = opponents[sock.fileno()]
+            if opp.message and not opp.err_flag:
+                try:
+                    opp.sock.sendall(opp.message)
+                    opp.message = None
+                except:
+                    pass
