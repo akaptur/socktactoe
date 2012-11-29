@@ -14,31 +14,39 @@ class Opponent(object):
     def __init__(self, sock):
         self.sock = sock
         self.sock.setblocking(False)
-        self.id_num = sock.fileno()
         self.game = Game()
         self.message = self.game.start_message()+"\n"+self.game.board_as_string()
         self.game_over = False
         self.err_flag = False
 
+    def fileno(self):
+        return self.sock.fileno()
 
+    def get_message(self):
+        try:
+            some_string = self.sock.recv(128)  
+            print "move received:", some_string
+            move = int(some_string)
+            return move
+        except socket.error:
+            print "socket error"
+            self.err_flag = True
+        except:
+            print "Parse error"
 
-def parse(move_as_string):
-    try:
-        move = int(move_as_string) 
-        return move
-    except:
-        return "Parse error"
+    def handle_client_move(self):
+        assert self.game.player == 'x'
         
+        client_move = self.get_message() 
 
-
-def get_message(sock):
-    try:
-        some_string = sock.recv(128)  # move is only three bytes, but want to catch all of invalid move at once
-        print "move received:", some_string
-        return some_string
-    except socket.error as (err_num, err_string):
-        print "socket error"
-        return "Error"+str(err_num)
+        if not type(client_move) == int or not self.game.validate_move(client_move):
+            print "Invalid move received on socket %d" % self.sock.fileno()
+            self.message = "Not valid.  Try again."
+        else:
+            self.game.make_move(client_move, self.game.player)
+            print "Move made on socket ", self.sock.fileno(), ":\n", self.game.board_as_string()
+            self.game.player = 'o'
+        
 
 
 def make_listen_sock():
@@ -48,37 +56,20 @@ def make_listen_sock():
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind((HOST, PORT))
     s.listen(5)
-
     return s
 
-def accept_connection(opponents, listen_sock):
+def add_new_opponent(opponents, listen_sock):
     game_sock, address = listen_sock.accept()
     opp = Opponent(game_sock)
-    opponents[opp.sock] = opp
+    # opponents[opp.sock] = opp
+    opponents.append(opp)
     return opponents
-
-def handle_client_move(opp):
-    assert opp.game.player == 'x'
-    
-    msg = get_message(opp.sock) 
-    if "Error" in msg:
-        print msg
-        opp.err_flag = True
-    client_move = parse(msg)
-
-    if not type(client_move) == int or not opp.game.validate_move(client_move):
-        print "Invalid move received on socket %d" % opp.sock.fileno()
-        opp.message = "Not valid.  Try again."
-    else:
-        opp.game.make_move(client_move, opp.game.player)
-        print "Move made on socket ", opp.sock.fileno(), ":\n", opp.game.board_as_string()
-        opp.game.player = 'o'
 
 
 def process_games(opponents):
     closed_socks = []
 
-    for opp in opponents.values():
+    for opp in opponents:
 
         if opp.err_flag: 
             closed_socks.append(opp.sock)
@@ -101,11 +92,12 @@ def process_games(opponents):
                 opp.message = opp.game.board_as_string()
             opp.game.player = 'x'
 
-    opponents = dict((k,opp) for (k, opp) in opponents.items() if opp.sock not in closed_socks)
+    # opponents = dict((k,opp) for (k, opp) in opponents.items() if opp.sock not in closed_socks)
+    opponents = [opp for opp in opponents if opp.sock not in closed_socks]
     return opponents
 
 def process_sockets(opponents, listen_sock):
-    all_sockets = opponents.keys() + [listen_sock]
+    all_sockets = opponents + [listen_sock]
     # print "All sockets:", all_sockets
 
     read_socks, write_socks, _ = select.select(all_sockets, all_sockets, '')
@@ -113,29 +105,29 @@ def process_sockets(opponents, listen_sock):
 
     # pdb.set_trace()
 
-    for sock in read_socks:
-        if sock is listen_sock:
-            opponents = accept_connection(opponents, listen_sock)
+    for thing in read_socks:
+        if thing is listen_sock:
+            opponents = add_new_opponent(opponents, listen_sock)
 
         else:
-            opp = opponents[sock]
-            if opp.game.player == 'x':
-                handle_client_move(opp)
+            # thing is an opponent
+            if thing.game.player == 'x':
+                thing.handle_client_move()
 
 
-    for sock in write_socks:
-        opp = opponents[sock]
+    for opp in write_socks:
         if opp.message and not opp.err_flag:
             try:
                 opp.sock.sendall(opp.message)
                 opp.message = None
             except:
+                print "write error"
                 pass
 
 if __name__ == '__main__':
     listen_sock = make_listen_sock()
     print "Listening for games"
-    opponents = {}
+    opponents = []
 
     while True:
         opponents = process_games(opponents)        
