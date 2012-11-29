@@ -13,7 +13,7 @@ class Game():
         try:
             return self.matrix[square] == ' '
         except: #mostly catching index errors
-            print "validate move error"
+            print "validate move error:", square
             return False
 
     def make_move(self, square, player):
@@ -50,46 +50,20 @@ class Game():
         empty_squares = sum(self.matrix[sq]== ' ' for sq in range(9))
         return self.winner_if_any() or not empty_squares
 
-    def max_value(self):  # maximizing player is computer ('o')
+    def minimax(self, player='o', func=max):
+        child_player = 'x' if player == 'o' else 'o'
+        child_func = min if func == max else max
+
         if self.is_over():
             return self.utility(), None
         else:
             children = []
-            availmoves = self.legal_moves()
-            for m in availmoves:
-                self.matrix[m] = 'o'
-                util, _ = self.min_value()
+            for m in self.legal_moves():
+                self.matrix[m] = player
+                util, _ = self.min_max(child_player, child_func)
                 children.append((util, m))
                 self.matrix[m] = ' '
-        print "children in max val: ", children
-        # util, best_move = max(children, key= lambda x: x[0])
-        return max(children, key= lambda x: x[0])
-
-    def min_value(self):  # minimizing player is user ('x')
-        if self.is_over():
-            return self.utility(), None
-        else:
-            children = []
-            availmoves = self.legal_moves()
-            for m in availmoves:
-                self.matrix[m] = 'x'
-                util, _ = self.max_value()
-                children.append((util, m))
-                self.matrix[m] = ' '
-        print "children in min val: ", children
-        # util, best_move = min(children, key= lambda x: x[0])
-        return min(children, key= lambda x: x[0])
-
-    def minimax(self):
-        availmoves = self.legal_moves()
-        options = []
-        for m in availmoves:
-            self.matrix[m] = 'o'
-            util, _ = self.min_value()
-            options.append((util, m))
-            self.matrix[m] = ' '
-        # util, best_move = max(options, key=lambda x: x[0])
-        return max(options, key=lambda x: x[0])
+        return func(children, key=lambda x: x[0]) 
 
     def board_as_string(self):
         b = self.matrix
