@@ -91,8 +91,7 @@ def process_games(opponents):
             print "Game process message is", opp.message
 
         elif opp.game.player == 'o':
-            # _, best_move = opp.game.minimax()
-            _, best_move = opp.game.min_max('o', max)
+            _, best_move = opp.game.minimax('o', max)
             opp.game.make_move(best_move, 'o')
             if opp.game.is_over():
                 opp.message = opp.game.end_message()
