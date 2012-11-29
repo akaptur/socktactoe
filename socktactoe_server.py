@@ -20,6 +20,8 @@ class Opponent(object):
         self.err_flag = False
 
     def fileno(self):
+        # This method makes Opponent objects quack like i/o objects
+        # which means they can be handled by select.select.
         return self.sock.fileno()
 
     def get_message(self):
@@ -31,12 +33,11 @@ class Opponent(object):
         except socket.error:
             print "socket error"
             self.err_flag = True
-        except:
+        except TypeError:
             print "Parse error"
 
     def handle_client_move(self):
         assert self.game.player == 'x'
-        
         client_move = self.get_message() 
 
         if not type(client_move) == int or not self.game.validate_move(client_move):
@@ -48,7 +49,6 @@ class Opponent(object):
             self.game.player = 'o'
         
 
-
 def make_listen_sock():
     HOST = sys.argv[1] if len(sys.argv) == 2 else "127.0.0.1"
     PORT = 1060
@@ -58,71 +58,59 @@ def make_listen_sock():
     s.listen(5)
     return s
 
-def add_new_opponent(opponents, listen_sock):
-    game_sock, address = listen_sock.accept()
-    opp = Opponent(game_sock)
-    # opponents[opp.sock] = opp
-    opponents.append(opp)
+def check_for_new_opponent(opponents, listen_sock):
+    pending_connection, _, _ = select.select([listen_sock], '', '', 0)
+    if pending_connection:
+        game_sock, address = listen_sock.accept()
+        opp = Opponent(game_sock)
+        opponents.append(opp)
     return opponents
 
 
-def process_games(opponents):
-    closed_socks = []
+def filter_opponents(opponents):
+    opps_to_delete = []
 
     for opp in opponents:
+        if opp.err_flag or (opp.game.is_over() and not opp.message):
+            opps_to_delete.append(opp)
 
-        if opp.err_flag: 
-            closed_socks.append(opp.sock)
+    return [opp for opp in opponents if opp not in opps_to_delete]
 
-        if opp.game_over and not opp.message:
-            opp.sock.close()
-            closed_socks.append(opp.sock)
 
-        elif opp.game.is_over():
+def process_games(opponents):
+    for opp in opponents:
+        if opp.game.is_over():
             opp.message = opp.game.end_message()
-            opp.game_over = True
 
         elif opp.game.player == 'o':
-            util, best_move = opp.game.minimax()
+            _, best_move = opp.game.minimax()
             opp.game.make_move(best_move, 'o')
             if opp.game.is_over():
-                opp.message = opp.game.board_as_string()+'\n'+opp.game.end_message()
-                opp.game_over = True
+                opp.message = opp.game.end_message()
             else:
                 opp.message = opp.game.board_as_string()
             opp.game.player = 'x'
 
-    # opponents = dict((k,opp) for (k, opp) in opponents.items() if opp.sock not in closed_socks)
-    opponents = [opp for opp in opponents if opp.sock not in closed_socks]
-    return opponents
 
-def process_sockets(opponents, listen_sock):
-    all_sockets = opponents + [listen_sock]
-    # print "All sockets:", all_sockets
+def process_sockets(opponents):
 
-    read_socks, write_socks, _ = select.select(all_sockets, all_sockets, '')
-    # print "Read:", read_socks, '\nWrite:', write_socks
+    read_socks, write_socks, _ = select.select(opponents, opponents, '', 0)
+    print "Read:", read_socks, '\nWrite:', write_socks
 
     # pdb.set_trace()
 
-    for thing in read_socks:
-        if thing is listen_sock:
-            opponents = add_new_opponent(opponents, listen_sock)
-
-        else:
-            # thing is an opponent
-            if thing.game.player == 'x':
-                thing.handle_client_move()
-
+    for opp in read_socks:
+        if opp.game.player == 'x':
+            opp.handle_client_move()
 
     for opp in write_socks:
-        if opp.message and not opp.err_flag:
+        if opp.message:
             try:
                 opp.sock.sendall(opp.message)
                 opp.message = None
             except:
-                print "write error"
-                pass
+                print "write error on socket %d" % opp.fileno()
+
 
 if __name__ == '__main__':
     listen_sock = make_listen_sock()
@@ -130,6 +118,9 @@ if __name__ == '__main__':
     opponents = []
 
     while True:
-        opponents = process_games(opponents)        
-        process_sockets(opponents, listen_sock)
+        opponents = check_for_new_opponent(opponents, listen_sock)
+        opponents = filter_opponents(opponents)
+
+        process_games(opponents)      
+        process_sockets(opponents)
        
