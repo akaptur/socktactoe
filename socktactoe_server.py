@@ -16,7 +16,6 @@ class Opponent(object):
         self.sock.setblocking(False)
         self.game = Game()
         self.message = self.game.start_message()+"\n"+self.game.board_as_string()
-        self.game_over = False
         self.err_flag = False
 
     def fileno(self):
@@ -48,7 +47,7 @@ class Opponent(object):
             self.message = "Not valid.  Try again."
         else:
             self.game.make_move(client_move, self.game.player)
-            print "Move made on socket ", self.sock.fileno(), ":\n", self.game.board_as_string()
+            print "Move made on socket "+self.sock.fileno()+":\n", self.game.board_as_string()
             self.game.player = 'o'
         
 
@@ -61,13 +60,14 @@ def make_listen_sock():
     s.listen(5)
     return s
 
-def check_for_new_opponent(opponents, listen_sock):
+def pending_connection(listen_sock):
     pending_connection, _, _ = select.select([listen_sock], '', '', 0)
-    if pending_connection:
-        game_sock, address = listen_sock.accept()
-        opp = Opponent(game_sock)
-        opponents.append(opp)
-    return opponents
+    return pending_connection
+
+def get_new_opp(listen_sock):
+    game_sock, address = listen_sock.accept()
+    new_opp = Opponent(game_sock)
+    return new_opp
 
 
 def filter_games(opponents):
@@ -88,38 +88,35 @@ def process_games(opponents):
     for opp in opponents:
         if opp.game.is_over():
             opp.message = opp.game.end_message()
-            print "Game process message is", opp.message
 
         elif opp.game.player == 'o':
             _, best_move = opp.game.minimax('o', max)
             opp.game.make_move(best_move, 'o')
             if opp.game.is_over():
                 opp.message = opp.game.end_message()
-                print "Game process message (o loop) is", opp.message
             else:
                 opp.message = opp.game.board_as_string()
             opp.game.player = 'x'
 
 
 def process_sockets(opponents):
+    read_opps, write_opps, _ = select.select(opponents, opponents, '', 0)
+    # print "Read:", [s.fileno() for s in read_socks]
+    # print "Write:", [s.fileno() for s in write_socks]
 
-    read_socks, write_socks, _ = select.select(opponents, opponents, '', 0)
-    # print "Read:", read_socks, '\nWrite:', write_socks
-
-    # pdb.set_trace()
-
-    for opp in read_socks:
+    for opp in read_opps:
         if opp.game.player == 'x':
             opp.handle_client_move()
 
-    for opp in write_socks:
+    for opp in write_opps:
         if opp.message:
             try:
                 opp.sock.sendall(opp.message)
-            except:
+                opp.message = None
+            except Exception as e:
                 print "write error on socket %d" % opp.fileno()
                 opp.err_flag = True
-            opp.message = None
+                print e
 
 
 if __name__ == '__main__':
@@ -128,13 +125,11 @@ if __name__ == '__main__':
     opponents = []
 
     while True:
-        opponents = check_for_new_opponent(opponents, listen_sock)
-
-        opponents = filter_games(opponents)
+        if pending_connection(listen_sock):
+            opponents += [get_new_opp(listen_sock)]
 
         process_games(opponents)
-
+        opponents = filter_games(opponents)
         opponents = filter_sockets(opponents)
-
         process_sockets(opponents)
        
