@@ -1,8 +1,11 @@
 from socktactoe_client import Client, HOST, PORT
+import sys
 
 MODE = "random"
 
-clients = [Client(MODE) for i in range(100)]
+num_clients = int(sys.argv[1]) if len(sys.argv) == 2 else 10
+
+clients = [Client(MODE) for i in range(num_clients)]
 
 while clients:
     for client in clients:

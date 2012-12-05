@@ -5,17 +5,13 @@ import sys
 import pdb
 import time
 
-# TODO: better logging
-# TODO: error handling when client unexpectedly disconnects (ctrl-c)
-# TODO: neaten loops (add more functions)
-# TODO: structure the network code to be able to play e.g. checkers just as seamlessly
-
 class Opponent(object):
     def __init__(self, sock):
         self.sock = sock
         self.sock.setblocking(False)
         self.game = Game()
         self.message = self.game.start_message()+"\n"+self.game.board_as_string()
+        self.done = False
         self.err_flag = False
 
     def fileno(self):
@@ -43,11 +39,11 @@ class Opponent(object):
         client_move = self.get_message() 
 
         if not type(client_move) == int or not self.game.validate_move(client_move):
-            print "Invalid move received on socket %d" % self.sock.fileno()
+            print "Invalid move received on socket %d" % self.fileno()
             self.message = "Not valid.  Try again."
         else:
             self.game.make_move(client_move, self.game.player)
-            print "Move made on socket "+self.sock.fileno()+":\n", self.game.board_as_string()
+            print "Move made on socket "+str(self.fileno())+":\n", self.game.board_as_string()
             self.game.player = 'o'
         
 
@@ -70,30 +66,21 @@ def get_new_opp(listen_sock):
     return new_opp
 
 
-def filter_games(opponents):
-    opps_to_delete = []
-
-    for opp in opponents:
-        if opp.game.is_over() and not opp.message:
-            opps_to_delete.append(opp)
-
-    return [opp for opp in opponents if opp not in opps_to_delete]
-
-
-def filter_sockets(opponents):
-    return [opp for opp in opponents if not opp.err_flag]
+def filter_opponents(opponents):
+    return [opp for opp in opponents if not opp.done]
 
 
 def process_games(opponents):
     for opp in opponents:
         if opp.game.is_over():
             opp.message = opp.game.end_message()
-
+            opp.done = True
         elif opp.game.player == 'o':
             _, best_move = opp.game.minimax('o', max)
             opp.game.make_move(best_move, 'o')
             if opp.game.is_over():
                 opp.message = opp.game.end_message()
+                opp.done = True
             else:
                 opp.message = opp.game.board_as_string()
             opp.game.player = 'x'
@@ -129,7 +116,7 @@ if __name__ == '__main__':
             opponents += [get_new_opp(listen_sock)]
 
         process_games(opponents)
-        opponents = filter_games(opponents)
-        opponents = filter_sockets(opponents)
         process_sockets(opponents)
+        opponents = filter_opponents(opponents)
+        
        
