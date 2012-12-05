@@ -60,7 +60,7 @@ class Game():
             children = []
             for m in self.legal_moves():
                 self.matrix[m] = player
-                util, _ = self.min_max(child_player, child_func)
+                util, _ = self.minimax(child_player, child_func)
                 children.append((util, m))
                 self.matrix[m] = ' '
         return func(children, key=lambda x: x[0]) 
