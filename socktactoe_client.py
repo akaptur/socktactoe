@@ -1,28 +1,44 @@
 import socket
 import sys
 import pdb
+import random
 
-if __name__ == '__main__':
-    HOST = sys.argv[1] if len(sys.argv) == 2 else "127.0.0.1"
-    PORT = 1060
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((HOST, PORT))
-    print "Client has been assigned sock name", s.getsockname()
-    
+MODE = sys.argv[1] if len(sys.argv) == 2 else "single-player"
 
+HOST = sys.argv[2] if len(sys.argv) == 3 else "127.0.0.1"
+PORT = 1060
 
-    while True:    
-        msg_recv = s.recv(100)
+class Client(object):
+    def __init__(self, mode):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((HOST, PORT))
+        print "Client has been assigned sock name", self.sock.getsockname()
+        self.done = False
+        self.mode = mode
 
+    def play(self):
+        msg_recv = self.sock.recv(100)
         if not msg_recv:
             print "Sorry, something went wrong."
-            break
+            # pdb.set_trace()
+            self.done = True
 
         print msg_recv
 
         if "Game over" in msg_recv:
             print "Thanks for playing!"
-            break
+            self.done = True
         else:
-            msg_to_send = raw_input("Input a move (0 to 8)\n")
-            s.sendall(msg_to_send)
+            if self.mode == "random":
+                msg_to_send = str(random.randint(0,8))
+                print "random move: "+msg_to_send
+            elif self.mode == "single-player":
+                msg_to_send = raw_input("Input a move (0 to 8)\n")
+            self.sock.sendall(msg_to_send)
+
+
+if __name__ == '__main__':
+    c = Client(MODE)
+    while not c.done:
+        c.play()
+
