@@ -3,6 +3,7 @@ import pdb
 
 
 class Game():
+    memo = {}
 
     def __init__(self):
         self.matrix = [' ']*9
@@ -49,19 +50,27 @@ class Game():
         return self.winner_if_any() or not empty_squares
 
     def minimax(self, player='o', func=max):
-        child_player = 'x' if player == 'o' else 'o'
-        child_func = min if func == max else max
-
-        if self.is_over():
-            return self.utility(), None
+        board_key = "".join(self.matrix)
+        if board_key in Game.memo:
+            return Game.memo[board_key]
         else:
-            children = []
-            for m in self.legal_moves():
-                self.matrix[m] = player
-                util, _ = self.minimax(child_player, child_func)
-                children.append((util, m))
-                self.matrix[m] = ' '
-        return func(children, key=lambda x: x[0])
+            child_player = 'x' if player == 'o' else 'o'
+            child_func = min if func == max else max
+
+            if self.is_over():
+                util = self.utility()
+                Game.memo[board_key] = util, None
+                return util, None
+            else:
+                children = []
+                for m in self.legal_moves():
+                    self.matrix[m] = player
+                    util, _ = self.minimax(child_player, child_func)
+                    children.append((util, m))
+                    self.matrix[m] = ' '
+            util, best_move = func(children, key=lambda x: x[0])
+            Game.memo[board_key] = util, best_move
+            return util, best_move
 
     def board_as_string(self):
         b = self.matrix
