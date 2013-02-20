@@ -6,7 +6,7 @@ class Game():
 
 
     def __init__(self):
-        self.matrix = [' ',' ',' ',' ',' ',' ',' ',' ',' ']
+        self.matrix = [' ']*9
         self.player = 'x'
 
     def validate_move(self, square):
@@ -28,8 +28,7 @@ class Game():
                      [0,4,8], [2,4,6]]
         
         for line in WINCOMBOS:
-            a, b, c = line
-            s = set([self.matrix[a], self.matrix[b], self.matrix[c]])
+            s = set([self.matrix[pos] for pos in line])
             if len(s) == 1 and ' ' not in s:
                 winner = s.pop()
                 return winner
