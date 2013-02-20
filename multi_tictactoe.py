@@ -4,7 +4,6 @@ import pdb
 
 class Game():
 
-
     def __init__(self):
         self.matrix = [' ']*9
         self.player = 'x'
@@ -26,7 +25,7 @@ class Game():
         WINCOMBOS = [[0,1,2], [3,4,5], [6,7,8],
                      [0,3,6], [1,4,7], [2,5,8],
                      [0,4,8], [2,4,6]]
-        
+
         for line in WINCOMBOS:
             s = set([self.matrix[pos] for pos in line])
             if len(s) == 1 and ' ' not in s:
@@ -62,7 +61,7 @@ class Game():
                 util, _ = self.minimax(child_player, child_func)
                 children.append((util, m))
                 self.matrix[m] = ' '
-        return func(children, key=lambda x: x[0]) 
+        return func(children, key=lambda x: x[0])
 
     def board_as_string(self):
         b = self.matrix
